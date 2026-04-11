@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#c8f55a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>MicroMove</title>
+<link rel="manifest" href="/manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0d0f;
+    --card: #16161a;
+    --border: #2a2a35;
+    --accent: #c8f55a;
+    --accent2: #ff6b6b;
+    --text: #f0f0f0;
+    --muted: #777;
+    --r: 16px;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 16px 80px;
+  }
+
+  /* Header */
+  .top-bar {
+    width: 100%;
+    max-width: 440px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 52px 0 8px;
+    margin-bottom: 4px;
+  }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 2.4rem;
+    color: var(--accent);
+    letter-spacing: -1px;
+    line-height: 1;
+  }
+
+  .tagline {
+    font-size: 0.62rem;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 3px;
+  }
+
+  /* Status pill */
+  #statusPill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 99px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    background: #1e1e24;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    transition: all 0.3s;
+  }
+  #statusPill.on { background: rgba(200,245,90,0.12); border-color: var(--accent); color: var(--accent); }
+  #statusPill.on::before { content:''; width:7px; height:7px; border-radius:50%; background:var(--accent); animation: blink 1.2s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* Countdown */
+  #countdownBox {
+    display: none;
+    width: 100%;
+    max-width: 440px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 20px;
+    margin-bottom: 14px;
+    align-items: center;
+    gap: 20px;
+  }
+  #countdownBox.visible { display: flex; }
+
+  .ring-container { position: relative; width: 90px; height: 90px; flex-shrink: 0; }
+  .ring-svg { transform: rotate(-90deg); }
+  .ring-track { fill: none; stroke: var(--border); stroke-width: 6; }
+  .ring-prog {
+    fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round;
+    transition: stroke-dashoffset 1s linear;
+    stroke-dasharray: 245.04;
+    stroke-dashoffset: 0;
+  }
+  .ring-center {
+    position: absolute; top:50%; left:50%;
+    transform: translate(-50%,-50%);
+    text-align: center;
+  }
+  .ring-time { font-family:'Syne',sans-serif; font-weight:800; font-size:1.05rem; color:var(--accent); }
+  .ring-lbl { font-size:0.5rem; color:var(--muted); letter-spacing:1px; text-transform:uppercase; }
+
+  .countdown-right {}
+  .cd-next-label { font-size:0.6rem; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-bottom:4px; }
+  .cd-exercise { font-family:'Syne',sans-serif; font-weight:700; font-size:1rem; color:var(--text); }
+  .cd-exercise-sub { font-size:0.65rem; color:var(--muted); margin-top:3px; }
+
+  /* Banner recordatorio */
+  #reminderBanner {
+    display: none;
+    width: 100%; max-width: 440px;
+    background: linear-gradient(135deg, rgba(200,245,90,0.15), rgba(200,245,90,0.05));
+    border: 1.5px solid var(--accent);
+    border-radius: var(--r);
+    padding: 18px 20px;
+    margin-bottom: 14px;
+    animation: slideIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  #reminderBanner.show { display: block; }
+  @keyframes slideIn { from { opacity:0; transform:translateY(-12px) scale(0.96); } to { opacity:1; transform:translateY(0) scale(1); } }
+
+  .banner-tag { font-size:0.55rem; color:var(--accent); letter-spacing:2px; text-transform:uppercase; margin-bottom:6px; }
+  .banner-ex { font-family:'Syne',sans-serif; font-weight:800; font-size:1.5rem; color: var(--accent); }
+  .banner-desc { font-size:0.7rem; color:var(--muted); margin-top:4px; }
+  .banner-done {
+    margin-top: 12px;
+    background: var(--accent);
+    color: #000;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 0.8rem;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    cursor: pointer;
+    letter-spacing: 1px;
+  }
+
+  /* Cards */
+  .card {
+    width: 100%; max-width: 440px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 18px;
+    margin-bottom: 12px;
+  }
+
+  .card-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  /* Intervalo */
+  .int-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; }
+  .int-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+    padding: 11px 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+  }
+  .int-btn:active { transform: scale(0.95); }
+  .int-btn.active { background: var(--accent); border-color: var(--accent); color:#000; font-weight:700; }
+
+  /* Ejercicios */
+  .ex-list { display:flex; flex-direction:column; gap:8px; }
+  .ex-item {
+    display:flex; align-items:center; gap:12px;
+    padding: 13px 14px;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .ex-item:active { transform: scale(0.98); }
+  .ex-item.sel { border-color: var(--accent); background: rgba(200,245,90,0.07); }
+  .ex-check {
+    width:20px; height:20px; border-radius:6px;
+    border:2px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0; font-size:11px; transition:all 0.15s;
+  }
+  .ex-item.sel .ex-check { background:var(--accent); border-color:var(--accent); color:#000; font-weight:700; }
+  .ex-emoji { font-size:1.4rem; }
+  .ex-name { font-family:'Syne',sans-serif; font-weight:700; font-size:0.9rem; }
+  .ex-desc { font-size:0.65rem; color:var(--muted); margin-top:2px; }
+
+  /* Horario */
+  .time-row { display:flex; gap:10px; align-items:center; }
+  .time-input {
+    background: #1c1c22; border:1px solid var(--border);
+    border-radius:9px; color:var(--text);
+    font-family:'Space Mono',monospace; font-size:1rem;
+    padding:12px 14px; flex:1; outline:none;
+    transition:border 0.15s;
+    -webkit-appearance: none;
+  }
+  .time-input:focus { border-color:var(--accent); }
+  .time-sep { color:var(--muted); }
+
+  /* Botón principal */
+  #mainBtn {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 32px);
+    max-width: 440px;
+    padding: 18px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    border: none;
+    border-radius: var(--r);
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 100;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  #mainBtn.start { background:var(--accent); color:#000; }
+  #mainBtn.stop  { background:var(--accent2); color:#fff; }
+  #mainBtn:active { transform: translateX(-50%) scale(0.97); }
+
+  /* Install banner */
+  #installBanner {
+    display: none;
+    width: 100%; max-width: 440px;
+    background: #1e1e2a;
+    border: 1px solid #3a3a50;
+    border-radius: var(--r);
+    padding: 14px 18px;
+    margin-bottom: 12px;
+    align-items: center;
+    gap: 12px;
+  }
+  #installBanner.show { display: flex; }
+  .install-text { flex:1; font-size:0.7rem; color:var(--muted); line-height:1.5; }
+  .install-text strong { color:var(--text); font-family:'Syne',sans-serif; }
+  .install-btn {
+    background: var(--accent); color:#000;
+    font-family:'Syne',sans-serif; font-weight:800;
+    font-size:0.72rem; border:none; border-radius:8px;
+    padding:8px 14px; cursor:pointer; white-space:nowrap; flex-shrink:0;
+  }
+
+  /* Permisos warning */
+  .warn-box {
+    width:100%; max-width:440px;
+    background:#1e1410; border:1px solid #5a3a20;
+    border-radius:10px; padding:12px 16px;
+    font-size:0.68rem; color:#ffaa55; line-height:1.6;
+    margin-bottom:12px; display:none;
+  }
+  .warn-box.show { display:block; }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div>
+    <h1>MicroMove</h1>
+    <div class="tagline">Muévete cada tanto</div>
+  </div>
+  <div id="statusPill">Pausado</div>
+</div>
+
+<!-- Install banner -->
+<div id="installBanner">
+  <div class="install-text"><strong>Instalar en pantalla de inicio</strong><br>Para recibir notificaciones en segundo plano</div>
+  <button class="install-btn" onclick="doInstall()">Instalar</button>
+</div>
+
+<!-- Warning permisos -->
+<div class="warn-box" id="permWarn">
+  ⚠️ Permitir notificaciones es necesario para avisar cuando la app está en segundo plano. Tocá el botón de nuevo y aceptá el permiso.
+</div>
+
+<!-- Reminder banner in-app -->
+<div id="reminderBanner">
+  <div class="banner-tag">⏰ ¡Hora de moverse!</div>
+  <div class="banner-ex" id="bannerEx">🐸 10 saltos</div>
+  <div class="banner-desc" id="bannerDesc">Jumping jacks o saltos en el lugar</div>
+  <button class="banner-done" onclick="dismissBanner()">✅ ¡Listo!</button>
+</div>
+
+<!-- Countdown -->
+<div id="countdownBox">
+  <div class="ring-container">
+    <svg class="ring-svg" width="90" height="90" viewBox="0 0 90 90">
+      <circle class="ring-track" cx="45" cy="45" r="39"/>
+      <circle class="ring-prog" id="ringProg" cx="45" cy="45" r="39"/>
+    </svg>
+    <div class="ring-center">
+      <div class="ring-time" id="ringTime">--:--</div>
+      <div class="ring-lbl">próximo</div>
+    </div>
+  </div>
+  <div class="countdown-right">
+    <div class="cd-next-label">Siguiente ejercicio</div>
+    <div class="cd-exercise" id="nextExName">—</div>
+    <div class="cd-exercise-sub" id="nextExDesc">—</div>
+  </div>
+</div>
+
+<!-- Intervalo -->
+<div class="card">
+  <div class="card-title">⏱ Cada cuánto avisarme</div>
+  <div class="int-grid">
+    <button class="int-btn" data-min="15">15 min</button>
+    <button class="int-btn active" data-min="30">30 min</button>
+    <button class="int-btn" data-min="45">45 min</button>
+    <button class="int-btn" data-min="60">1 hora</button>
+  </div>
+</div>
+
+<!-- Ejercicios -->
+<div class="card">
+  <div class="card-title">💪 Qué recordarme hacer</div>
+  <div class="ex-list" id="exList"></div>
+</div>
+
+<!-- Horario -->
+<div class="card">
+  <div class="card-title">🕐 Horario activo</div>
+  <div class="time-row">
+    <input type="time" class="time-input" id="startTime" value="08:00">
+    <span class="time-sep">—</span>
+    <input type="time" class="time-input" id="endTime" value="20:00">
+  </div>
+</div>
+
+<!-- Spacer para el botón fijo -->
+<div style="height:80px"></div>
+
+<button id="mainBtn" class="start" onclick="toggleTimer()">▶ Iniciar recordatorios</button>
+
+<script>
+// ─── Datos ───────────────────────────────────────────
+const EX = [
+  { id:'saltos',      emoji:'🐸', name:'10 saltos',            desc:'Jumping jacks o saltos en el lugar' },
+  { id:'papada',      emoji:'😤', name:'Ejercicios de papada', desc:'Chin tucks + presión lengua al paladar' },
+  { id:'cuello',      emoji:'🦒', name:'Estirar el cuello',    desc:'Izq, der, adelante, atrás — 30 seg' },
+  { id:'hombros',     emoji:'🔄', name:'Rotar hombros',        desc:'10 rotaciones hacia atrás' },
+  { id:'sentadillas', emoji:'🦵', name:'5 sentadillas',        desc:'Lentas y controladas' },
+  { id:'ojos',        emoji:'👁️', name:'Descanso visual',      desc:'Mirar lejos 20 seg — regla 20-20-20' },
+  { id:'agua',        emoji:'💧', name:'Tomar agua',           desc:'Un vaso de agua ahora' },
+  { id:'espalda',     emoji:'🙆', name:'Estirar espalda',      desc:'Giro de torso sentado, 5 por lado' },
+];
+
+let selected = new Set(['saltos','papada']);
+let intervalMin = 30;
+let running = false;
+let timerId = null;
+let cntId = null;
+let nextFire = null;
+let nextEx = null;
+let swReg = null;
+let deferredPrompt = null;
+const CIRC = 245.04; // 2π×39
+
+// ─── Service Worker ───────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js')
+    .then(r => { swReg = r; console.log('SW registered'); })
+    .catch(e => console.warn('SW failed', e));
+}
+
+// ─── Install prompt ───────────────────────────────────
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('installBanner').classList.add('show');
+});
+
+window.addEventListener('appinstalled', () => {
+  document.getElementById('installBanner').classList.remove('show');
+  deferredPrompt = null;
+});
+
+function doInstall() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(() => { deferredPrompt = null; });
+  document.getElementById('installBanner').classList.remove('show');
+}
+
+// ─── Build exercise list ──────────────────────────────
+const exList = document.getElementById('exList');
+EX.forEach(ex => {
+  const d = document.createElement('div');
+  d.className = 'ex-item' + (selected.has(ex.id) ? ' sel' : '');
+  d.dataset.id = ex.id;
+  d.innerHTML = `
+    <div class="ex-check">${selected.has(ex.id) ? '✓' : ''}</div>
+    <span class="ex-emoji">${ex.emoji}</span>
+    <div>
+      <div class="ex-name">${ex.name}</div>
+      <div class="ex-desc">${ex.desc}</div>
+    </div>`;
+  d.onclick = () => toggleEx(ex.id, d);
+  exList.appendChild(d);
+});
+
+function toggleEx(id, el) {
+  if (running) return;
+  if (selected.has(id)) {
+    if (selected.size === 1) return;
+    selected.delete(id);
+    el.classList.remove('sel');
+    el.querySelector('.ex-check').textContent = '';
+  } else {
+    selected.add(id);
+    el.classList.add('sel');
+    el.querySelector('.ex-check').textContent = '✓';
+  }
+}
+
+// ─── Interval buttons ─────────────────────────────────
+document.querySelectorAll('.int-btn').forEach(btn => {
+  btn.onclick = () => {
+    if (running) return;
+    document.querySelectorAll('.int-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    intervalMin = parseInt(btn.dataset.min);
+  };
+});
+
+// ─── Helpers ──────────────────────────────────────────
+function pickRandom() {
+  const arr = [...selected];
+  return EX.find(e => e.id === arr[Math.floor(Math.random() * arr.length)]);
+}
+
+function inSchedule() {
+  const now = new Date();
+  const [sh, sm] = document.getElementById('startTime').value.split(':').map(Number);
+  const [eh, em] = document.getElementById('endTime').value.split(':').map(Number);
+  const cur = now.getHours()*60 + now.getMinutes();
+  return cur >= sh*60+sm && cur <= eh*60+em;
+}
+
+// ─── Reminder ─────────────────────────────────────────
+function fireReminder() {
+  const ex = pickRandom();
+  if (inSchedule()) {
+    showBanner(ex);
+    sendNotif(ex);
+  }
+  scheduleNext();
+}
+
+function showBanner(ex) {
+  document.getElementById('bannerEx').textContent = `${ex.emoji} ${ex.name}`;
+  document.getElementById('bannerDesc').textContent = ex.desc;
+  const b = document.getElementById('reminderBanner');
+  b.classList.remove('show');
+  void b.offsetWidth;
+  b.classList.add('show');
+}
+
+function dismissBanner() {
+  document.getElementById('reminderBanner').classList.remove('show');
+}
+
+function sendNotif(ex) {
+  if (Notification.permission !== 'granted') return;
+  if (swReg) {
+    swReg.showNotification('MicroMove 💪', {
+      body: `${ex.emoji} ${ex.name} — ${ex.desc}`,
+      tag: 'micromove',
+      renotify: true,
+      vibrate: [200, 100, 200],
+      icon: '/icon-192.png'
+    });
+  } else {
+    new Notification('MicroMove 💪', {
+      body: `${ex.emoji} ${ex.name} — ${ex.desc}`,
+      tag: 'micromove'
+    });
+  }
+}
+
+// ─── Schedule + Countdown ─────────────────────────────
+function scheduleNext() {
+  clearTimeout(timerId);
+  clearInterval(cntId);
+  nextEx = pickRandom();
+  nextFire = Date.now() + intervalMin * 60 * 1000;
+
+  // Mostrar en UI qué viene
+  document.getElementById('nextExName').textContent = `${nextEx.emoji} ${nextEx.name}`;
+  document.getElementById('nextExDesc').textContent = nextEx.desc;
+
+  timerId = setTimeout(fireReminder, intervalMin * 60 * 1000);
+
+  // También decirle al SW para cuando la app esté en bg
+  if (swReg && swReg.active) {
+    swReg.active.postMessage({
+      type: 'SCHEDULE',
+      delayMs: intervalMin * 60 * 1000,
+      exercise: nextEx
+    });
+  }
+
+  startCountdown();
+}
+
+function startCountdown() {
+  const total = intervalMin * 60;
+  const prog = document.getElementById('ringProg');
+  const label = document.getElementById('ringTime');
+  document.getElementById('countdownBox').classList.add('visible');
+
+  cntId = setInterval(() => {
+    const rem = Math.max(0, Math.floor((nextFire - Date.now()) / 1000));
+    const m = String(Math.floor(rem/60)).padStart(2,'0');
+    const s = String(rem%60).padStart(2,'0');
+    label.textContent = `${m}:${s}`;
+    prog.style.strokeDashoffset = CIRC * (1 - rem/total);
+    if (rem === 0) clearInterval(cntId);
+  }, 1000);
+}
+
+// ─── Main toggle ──────────────────────────────────────
+async function toggleTimer() {
+  const btn = document.getElementById('mainBtn');
+  const pill = document.getElementById('statusPill');
+
+  if (!running) {
+    // Pedir permiso notificaciones
+    if (Notification.permission === 'default') {
+      const p = await Notification.requestPermission();
+      if (p === 'denied') {
+        document.getElementById('permWarn').classList.add('show');
+        return;
+      }
+    }
+    document.getElementById('permWarn').classList.remove('show');
+    running = true;
+    btn.className = 'stop';
+    btn.textContent = '⏹ Detener';
+    pill.textContent = 'Activo';
+    pill.classList.add('on');
+    scheduleNext();
+  } else {
+    running = false;
+    clearTimeout(timerId);
+    clearInterval(cntId);
+    btn.className = 'start';
+    btn.textContent = '▶ Iniciar recordatorios';
+    pill.textContent = 'Pausado';
+    pill.classList.remove('on');
+    document.getElementById('countdownBox').classList.remove('visible');
+    document.getElementById('reminderBanner').classList.remove('show');
+  }
+}
+</script>
+</body>
+</html>
