@@ -529,7 +529,7 @@ header{background:linear-gradient(135deg,var(--pd),var(--p));color:#fff;padding:
 
 <script>
 // ─────────────────────────────────────────────────────────────────────────────
-const GAS = 'https://script.google.com/macros/s/AKfycbxhKFk2WAi-KRY5xGBsI6_6Pvp3jDjt8mSRXvy7I1WehNmBpJamqK9G9Q1ZJSCSgAdfDA/exec';
+const GAS = 'https://script.google.com/macros/s/AKfycbzWZzDvdGfW8vd2-FpQolT852cdPMeHbfKugn9DBOlju75bE1D0SUNB5EKEDOsI2vP4lA/exec'; // v5.38: alineado con seba21/sendwa — el flyer apuntaba a otro deployment de Apps Script
 const APP_VERSION = 'v5.38';
 
 // Escala del canvas de salida (2 = 2× respecto al tamaño visual = alta calidad)
@@ -761,41 +761,59 @@ async function recargar(){
     catch(e){ _of={}; }
 
     // 3b. Multicompra (2x1, 3x2, etc.)
-    // Fuente principal: endpoint dedicado con TODAS las filas activas.
-    // Fallback: multicompraActiva de getOfertas (compatibilidad).
+    // Camino A: _of.multicompraActiva — así lo leen seba21.html/sendwa.html/index.html,
+    // viene incluido en la misma respuesta de "getOfertas" de arriba.
+    // Camino B (respaldo): action=getMulticompraTodas — endpoint aparte del módulo
+    // flyer_multicompra.gs, por si en este backend "getOfertas" no lo incluye todavía.
     _poolMulticompra=new Map();
-    _mcDiag={fuente:'',ok:null,total:0,matcheados:0,sinMatch:[],error:''};
-    try{
-      const rm=await gasGet('getMulticompraTodas');
-      _mcDiag.fuente='getMulticompraTodas'; _mcDiag.ok=rm?rm.ok:false; _mcDiag.total=rm&&rm.total||0;
-      if(rm&&rm.ok&&Array.isArray(rm.items)){
-        rm.items.forEach(it=>{
-          let id=Number(it.id)||0;
-          if(!id){
-            const nq=quitarAcentos(String(it.nombre||'').toLowerCase()).trim();
-            const m=_prods.find(p=>quitarAcentos(p.name.toLowerCase()).trim()===nq); if(m) id=m.id;
-          }
-          const local=_prods.find(x=>x.id===id);
-          if(!local){_mcDiag.sinMatch.push(it.nombre||('id '+id));return;}
-          _mcDiag.matcheados++;
-          _poolMulticompra.set(id,{tipo:String(it.tipo||'').toUpperCase(),cantidad:it.cantidad||0,
-            precio:it.precioPack||0,grupo:it.grupo||''});
+    _mcDiag = {fuente:'', ok:null, total:0, matcheados:0, sinMatch:[], error:''};
+
+    const mcArrA = _of.multicompraActiva || [];
+    if(mcArrA.length>0){
+      _mcDiag.fuente = 'getOfertas (multicompraActiva)';
+      _mcDiag.ok = true;
+      _mcDiag.total = mcArrA.length;
+      mcArrA.forEach(p=>{
+        const local = _prods.find(x=>x.id===Number(p.id));
+        if(!local){ _mcDiag.sinMatch.push(p.name||p.nombre||('id '+p.id)); return; }
+        _mcDiag.matcheados++;
+        _poolMulticompra.set(local.id,{
+          tipo:     String(p.MULTICOMPRA_TIPO     || '').toUpperCase(),
+          cantidad: p.MULTICOMPRA_CANTIDAD || 0,
+          precio:   p.MULTICOMPRA_PRECIO   || 0, // igual que seba21/sendwa: puede ser unitario o total según cargue la planilla
+          grupo:    p.GRUPO_MULTICOMPRA    || ''
         });
-      }else if(rm&&rm.ok===false){_mcDiag.error=rm.error||'(sin detalle)';}
-    }catch(e){_mcDiag.ok=false;_mcDiag.error=String(e);console.warn('⚠️ getMulticompraTodas:',e);}
-    if(_poolMulticompra.size===0){
-      const mcArrA=_of.multicompraActiva||[];
-      if(mcArrA.length>0){
-        if(!_mcDiag.fuente)_mcDiag.fuente='getOfertas (multicompraActiva)';
-        if(_mcDiag.ok===null)_mcDiag.ok=true; if(!_mcDiag.total)_mcDiag.total=mcArrA.length;
-        mcArrA.forEach(p=>{
-          const local=_prods.find(x=>x.id===Number(p.id));
-          if(!local){_mcDiag.sinMatch.push(p.name||p.nombre||('id '+p.id));return;}
-          _mcDiag.matcheados++;
-          _poolMulticompra.set(local.id,{tipo:String(p.MULTICOMPRA_TIPO||'').toUpperCase(),
-            cantidad:p.MULTICOMPRA_CANTIDAD||0,precio:p.MULTICOMPRA_PRECIO||0,grupo:p.GRUPO_MULTICOMPRA||''});
-        });
-      }
+      });
+    } else {
+      // Respaldo: endpoint dedicado del flyer
+      try{
+        const rm = await gasGet('getMulticompraTodas');
+        _mcDiag.fuente = 'getMulticompraTodas (respaldo)';
+        _mcDiag.ok = rm ? rm.ok : false;
+        _mcDiag.total = rm && rm.total || 0;
+        if(rm && rm.ok && Array.isArray(rm.items)){
+          rm.items.forEach(it=>{
+            let id = Number(it.id)||0;
+            if(!id){
+              // El id puede venir vacío en la fila — como respaldo, matcheamos por nombre exacto
+              const nombreQ = quitarAcentos(String(it.nombre||'').toLowerCase()).trim();
+              const match = _prods.find(p=>quitarAcentos(p.name.toLowerCase()).trim()===nombreQ);
+              if(match) id=match.id;
+            }
+            if(!id){ _mcDiag.sinMatch.push(it.nombre||'(sin nombre)'); return; }
+            _mcDiag.matcheados++;
+            _poolMulticompra.set(id,{
+              tipo:     String(it.tipo||'').toUpperCase(),
+              cantidad: it.cantidad||0,
+              precio:   it.precioPack||0, // precio TOTAL del pack (ej: 3 x $5.000 = $5.000 los 3)
+              grupo:    it.grupo||''
+            });
+          });
+        } else if(rm && rm.ok===false){
+          _mcDiag.error = rm.error||'(sin detalle)';
+          console.warn('⚠️ getMulticompraTodas devolvió error:', rm.error);
+        }
+      }catch(e){ _mcDiag.ok=false; _mcDiag.error = String(e); console.warn('⚠️ Error cargando multicompra:', e); }
     }
 
     // 4. Cervecero
@@ -1326,8 +1344,6 @@ function actualizarDiag(){
     {cls:_pools.cervecero.length>0?'ok':'warn',
       lbl:'🍺 Cervecero '+(cervModo==='1'?'FORZADO':cervModo==='0'?'APAGADO':'auto'),
       cnt:_pools.cervecero.length},
-    {cls:_pools.multicompra.length>0?'ok':'warn',
-      lbl:'📦 Multicompra', cnt:_pools.multicompra.length+' / '+(_mcDiag.total||0)},
     {cls:_pools.combinado.length>0?'ok':'warn',
       lbl:'🗂️ Combinado (3 categ.)', cnt:_pools.combinado.length},
     {cls:'ok',
