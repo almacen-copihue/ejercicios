@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title id="pageTitle">🖼️ Flyer · Copihue</title>
+<title>🖼️ Flyer · Copihue</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -314,7 +314,7 @@ header{background:linear-gradient(135deg,var(--pd),var(--p));color:#fff;padding:
   <div class="h-brand">
     <div class="h-icon">🖼</div>
     <div>
-      <div class="h-title">Copihue Flyer <span style="font-family:var(--mono);font-size:.6rem;font-weight:400;opacity:.7;background:rgba(255,255,255,.15);border-radius:4px;padding:1px 6px;margin-left:4px;vertical-align:middle" id="badgeVer">v5.35</span></div>
+      <div class="h-title">Copihue Flyer <span style="font-family:var(--mono);font-size:.6rem;font-weight:400;opacity:.7;background:rgba(255,255,255,.15);border-radius:4px;padding:1px 6px;margin-left:4px;vertical-align:middle" id="badgeVer">v5.36</span></div>
       <div class="h-sub">Generador para redes sociales</div>
     </div>
   </div>
@@ -530,7 +530,7 @@ header{background:linear-gradient(135deg,var(--pd),var(--p));color:#fff;padding:
 <script>
 // ─────────────────────────────────────────────────────────────────────────────
 const GAS = 'https://script.google.com/macros/s/AKfycbxhKFk2WAi-KRY5xGBsI6_6Pvp3jDjt8mSRXvy7I1WehNmBpJamqK9G9Q1ZJSCSgAdfDA/exec';
-const APP_VERSION = 'v5.37';
+const VERSION = 'v5.36';
 
 // Escala del canvas de salida (2 = 2× respecto al tamaño visual = alta calidad)
 // El preview en pantalla se muestra al 50% del tamaño real
@@ -914,26 +914,17 @@ function calcCombo(p){
   return {po:p.price, et:'🎯 COMBO -'+pct+'%', pct, eslogan:'Combo del día'};
 }
 
-// Últimas unidades — precio y % vienen de Code.gs (planilla manda, igual que
-// seba21.html/sendwa.html: u.precioOferta / u.precio / u.pct son la fuente de
-// verdad). Solo si no vienen (ej. fallback local por stock bajo, sin dato de
-// backend) se recalcula acá con la misma regla que index.html:
-// diasVenc<=3 → -25%, sino usa código relámpago del producto.
-function calcUltimas(p, diasParaVencer, ofertaData){
-  const u = ofertaData || {};
-  let po, pct;
-  if(u.precioOferta!=null || u.pct!=null){
-    pct = u.pct!=null ? u.pct : (p.price>0 ? Math.round((1-u.precioOferta/p.price)*100) : 0);
-    po  = u.precioOferta!=null ? u.precioOferta : Math.round(p.price*(1-pct/100));
+// Últimas unidades — idéntico a calcularDescuentoUltimas del index.html
+// diasVenc<=3 → -25%, sino usa código relámpago del producto
+function calcUltimas(p, diasParaVencer){
+  let pct;
+  if(diasParaVencer!==null&&diasParaVencer!==undefined&&diasParaVencer<=3){
+    pct=25;
   } else {
-    if(diasParaVencer!==null&&diasParaVencer!==undefined&&diasParaVencer<=3){
-      pct=25;
-    } else {
-      const cfg=ORS[String(p.rel)];
-      pct=(cfg&&cfg.tipo==='pct'&&cfg.descuento>0)?cfg.descuento:10;
-    }
-    po=Math.round(p.price*(1-pct/100));
+    const cfg=ORS[String(p.rel)];
+    pct=(cfg&&cfg.tipo==='pct'&&cfg.descuento>0)?cfg.descuento:10;
   }
+  const po=Math.round(p.price*(1-pct/100));
   const diasLabel=diasParaVencer!==null&&diasParaVencer!==undefined
     ?(diasParaVencer===0?'⚠️ Vence hoy':'Vence en '+diasParaVencer+'d'):'';
   return {po, et:'ÚLTIMAS -'+pct+'%', pct, diasLabel};
@@ -1074,22 +1065,16 @@ function construirPools(){
   // ── ÚLTIMAS UNIDADES ─────────────────────────────────────────────────────
   // ultimasSeleccionadasSiempre = siempre disponible para el flyer
   // ultimasSeleccionadas        = solo si horario activo
-  console.log('🔍 Últimas: _of.ultimasSeleccionadasSiempre =', _of.ultimasSeleccionadasSiempre);
-  console.log('🔍 Últimas: _of.ultimasSeleccionadas =', _of.ultimasSeleccionadas);
-
   const ultSrc = _of.ultimasSeleccionadasSiempre || _of.ultimasSeleccionadas || [];
-  if(ultSrc.length > 0 && _prods.length > 0){
+  console.log('🔍 Últimas: fuente =', _of.ultimasSeleccionadasSiempre?'ultimasSeleccionadasSiempre':(_of.ultimasSeleccionadas?'ultimasSeleccionadas':'fallback'), '| filas =', ultSrc.length);
+  if(ultSrc.length > 0){
     _pools.ultimas = ultSrc.map(u=>{
       const p = _prods.find(x=>x.id===Number(u.id));
-      if(!p||p.stock<=0) {
-        console.warn('⚠️ Últimas: producto no encontrado o sin stock para id', u.id);
-        return null;
-      }
-      const calc = calcUltimas(p, u.diasParaVencer, u);
+      if(!p||p.stock<=0){ console.warn('⚠️ Últimas: sin match o sin stock para id', u.id); return null; }
+      const calc = calcUltimas(p, u.diasParaVencer);
       return {...p, ...calc};
     }).filter(Boolean);
   } else {
-    console.log('🔍 Últimas: usando fallback por stock bajo');
     // Fallback: productos con stock bajo
     _pools.ultimas = _prods
       .filter(p=>p.rel>0&&p.stock>0&&p.stock<5)
@@ -1121,22 +1106,16 @@ function construirPools(){
   }
 
   // ── MULTICOMPRA (2x1, 3x2, etc.) ────────────────────────────────────────────
-  // _poolMulticompra viene de action=getMulticompraTodas (flyer_multicompra.gs).
+  // _poolMulticompra viene de _of.multicompraActiva o, como respaldo, de
+  // action=getMulticompraTodas (flyer_multicompra.gs) — ver recargar().
   // mc.precio = precio TOTAL del pack (no unitario) — se muestra con la estrella
   // "estallido" en vez del badge normal (ver drawCard/drawStarburst).
-  // GRUPAL (mc.grupo): combina entre productos distintos — misma lectura que
-  // seba21.html/sendwa.html ("📦 Combinable AT x $AU"), NO es "llevá AT de este
-  // mismo producto". INDIVIDUAL (sin grupo): "AT x $precio" o "2da unidad" según tipo.
-  console.log('🔍 Multicompra: _poolMulticompra.size =', _poolMulticompra.size);
-  console.log('🔍 Multicompra: _prods.length =', _prods.length);
+  console.log('🔍 Multicompra: _poolMulticompra.size =', _poolMulticompra.size, '| _prods.length =', _prods.length);
   _pools.multicompra = [];
-  if (_poolMulticompra.size > 0 && _prods.length > 0) {
+  if(_poolMulticompra.size>0 && _prods.length>0){
     _pools.multicompra = [..._poolMulticompra.keys()].map(id=>{
       const p=_prods.find(x=>x.id===id);
-      if(!p||p.stock<=0) {
-        console.warn('⚠️ Multicompra: producto no encontrado o sin stock para id', id);
-        return null;
-      }
+      if(!p||p.stock<=0){ console.warn('⚠️ Multicompra: sin match o sin stock para id', id); return null; }
       const mc=_poolMulticompra.get(id);
       const etiqueta = mc.grupo
         ? `📦 Combinable ${mc.cantidad}x $${fmt(mc.precio)}`
@@ -1165,7 +1144,7 @@ function construirPools(){
    ..._pools.promos,
    ...(_of.ultimasSeleccionadasSiempre||[]).map(u=>{
      const p=_prods.find(x=>x.id===Number(u.id));
-     return p?{...p,...calcUltimas(p,u.diasParaVencer,u)}:null;
+     return p?{...p,...calcUltimas(p,u.diasParaVencer)}:null;
    }).filter(Boolean),
    ..._pools.cervecero]
     .forEach(p=>{if(p&&!seen.has(p.id)){seen.add(p.id);_pools.manual.push(p);}});
@@ -2763,9 +2742,7 @@ $('cfgMax').addEventListener('change',()=>{ if(_prods.length>0) poblarCandidatos
 $('cfgFormato').addEventListener('change',()=>{ /* solo afecta al generar */ });
 // Mostrar versión
 const _vEl=document.getElementById('badgeVer');
-if(_vEl)_vEl.textContent=APP_VERSION;
-const _tEl=document.getElementById('pageTitle');
-if(_tEl)_tEl.textContent='🖼️ Flyer · Copihue '+APP_VERSION;
+if(_vEl)_vEl.textContent=VERSION;
 recargar();
 </script>
 </body>
