@@ -4,33 +4,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🏪 Ofertas · Copihue v176</title>
+    <title>🏪 Catálogo · Copihue v176</title>
     <!--
     CHANGELOG
-    v176 · 2026-08-05
-      - SEPARACIÓN DE PÁGINA: index.html ahora es SOLO ofertas activas
-        (Relámpago, Destacadas, Especiales, Últimas, Recién Llegados,
-        Promos, Combos, Multicompra, Cervecero, Raspadita). El buscador,
-        las categorías y la grilla general de TODOS los productos se
-        mudaron a catalogo.html (archivo nuevo, aparte) — el botón
-        "Ver catálogo completo →" en el divisor "¿Qué andás buscando?"
-        lleva ahí.
-      - NUEVO: persistencia de carrito vía localStorage (clave
-        copihue_cart), enganchada en updateCartCount() — antes el
-        carrito era solo memoria (let cart = []) y se perdía al cambiar
-        de página; ahora viaja entre index.html y catalogo.html. Se
-        agregó a las claves protegidas de limpiarCacheViejo() para que
-        tampoco se pierda en cada actualización de versión.
-      - Botón flotante de búsqueda (🔍) ahora navega a catalogo.html en
-        vez de abrir el modal de búsqueda local (que se eliminó de acá).
-        Botón de home (🏠) ahora solo hace scroll arriba — antes limpiaba
-        buscador/categorías que ya no existen en esta página.
-      - FIX de raíz: varias funciones (setupSearch, goToHome, y el
-        catch de loadProductsFromAPI) tenían document.getElementById(...)
-        sin guardar contra null, asumiendo que el buscador/grilla
-        siempre existían en la página. Quedaron sin llamarse o
-        guardadas donde corresponde — quedan como código muerto
-        inofensivo, no se borraron por las dudas.
+    v176 · 2026-08-05 (ARCHIVO NUEVO — separado de index.html)
+      - Esta página es la mitad "buscar/ver todo" que se separó de
+        index.html: acá vive el buscador, las categorías y la grilla
+        general con TODOS los productos (tengan o no oferta activa).
+        Las ofertas curadas (Relámpago, Multicompra, Cervecero,
+        Raspadita, etc.) se quedaron en index.html — desde acá hay un
+        link "← Volver a Ofertas" arriba de todo.
+      - Sin construirPools()/seleccionarProductosOfertas()/render de
+        cada oferta: esta página no arma carruseles, así que ningún
+        producto queda excluido de la grilla general por estar en
+        oferta en la otra página.
+      - Sin intervalo de refresco de ofertas cada 60s ni fetch de
+        Jueves Cervecero — no hacía falta, esta página no los muestra.
+      - FIX de raíz: el módulo Raspadita asumía que su HTML (#rasp-modulo,
+        #raspBtnReveal, etc.) siempre existía — acá no existe, así que
+        se envolvió todo el módulo en un guard
+        (if (document.getElementById('rasp-modulo')) {...}) que no
+        afecta a index.html (ahí el módulo sigue andando igual).
+      - Carrito persistido en localStorage (mismo mecanismo que
+        index.html v176) — lo que se agrega acá se ve reflejado allá,
+        y viceversa.
     v175 · 2026-08-04
       - FIX Raspadita lenta (causa real, no la mide Lighthouse porque no es
         parte del documento principal): raspIniciar() disparaba 2 fetches
@@ -2383,290 +2380,83 @@
 </section>
 
 
-    <!-- ══════════ MÓDULO RASPADITA ══════════ -->
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
-    <div id="rasp-modulo">
-      <div class="rasp-titulo">🎰 Raspadita del día</div>
-      <div class="rasp-ticket">
-        <div class="rasp-inner">
-          <div class="rasp-head">
-            <div class="rasp-h1">🌺 Copihue</div>
-            <div class="rasp-sub">Raspá y ganá · 1 por día</div>
-          </div>
-
-          <!-- Loading -->
-          <div class="rasp-state activo" id="raspLoading">
-            <div class="rasp-spinner"></div>
-            <p style="text-align:center;font-size:.75rem;color:#888;margin-bottom:8px">Cargando premios...</p>
-          </div>
-
-          <!-- Ya jugó -->
-          <div class="rasp-state" id="raspYaJugo">
-            <div class="rasp-ya">
-              <span class="rasp-ya-ico">🌺</span>
-              <div class="rasp-ya-t">¡Ya usaste tu raspadita de hoy!</div>
-              <div class="rasp-ya-s">Volvé mañana para probar suerte de nuevo.</div>
-            </div>
-          </div>
-
-          <!-- Error -->
-          <div class="rasp-state" id="raspError">
-            <div class="rasp-err">
-              <span id="raspErrorMsg">No se pudieron cargar los premios.</span>
-              <br><button class="rasp-btn rasp-btn-ghost" onclick="raspIniciar()" style="margin-top:6px;width:100%">🔄 Reintentar</button>
-            </div>
-          </div>
-
-          <!-- Juego -->
-          <div class="rasp-state" id="raspJuego">
-            <div class="rasp-grid" id="raspGrid"></div>
-            <div class="rasp-result" id="raspResult">
-              <div class="rasp-result-t" id="raspResultT">Raspá las 9 casillas</div>
-              <div class="rasp-result-s" id="raspResultS">¡Tres iguales = premio!</div>
-            </div>
-            <div class="rasp-codigo" id="raspCodigo">
-              <div class="rasp-codigo-lbl">Tu código de premio</div>
-              <div class="rasp-codigo-val" id="raspCodigoVal">COP-XXXXX</div>
-              <div class="rasp-codigo-aviso" id="raspAvisoVence">Mostrá este código al cajero · Reservado hasta el cierre</div>
-            </div>
-            <div class="rasp-btns" id="raspBtns">
-              <button class="rasp-btn rasp-btn-dorado" id="raspBtnReveal">Ver todo</button>
-              <a class="rasp-btn rasp-btn-wa" id="raspBtnWA" href="#" target="_blank" style="display:none">📲 Reclamar</a>
-              <button class="rasp-btn rasp-btn-ghost" id="raspBtnReset" onclick="raspReset()" style="display:none;margin-top:6px;width:100%;background:rgba(255,100,0,0.15);border:1px solid rgba(255,100,0,0.4);color:#e65100;font-weight:700;">🔄 Jugar de nuevo (modo prueba)</button>
-            </div>
-          </div>
-
-        </div>
-        <div class="rasp-footer"></div>
-      </div>
-      <div class="rasp-condiciones">🎁 1 por día · 🏪 Solo retiro presencial · ⏰ Válido hasta el cierre · 📦 Sujeto a stock · 🚫 No acumulable</div>
-    </div>
-    <!-- ══════════ FIN RASPADITA ══════════ -->
-    <!-- ========== JUEVES CERVECERO — v174: ahora oculto salvo los jueves
-         (antes era "siempre visible, teaser el resto de la semana"). Arranca
-         con cls-oculto y el script siguiente lo muestra al instante si
-         corresponde, sin esperar al fetch de productos — así en días que no
-         son jueves no llega ni a parpadear. ========== -->
-    <div class="ofertas-container cervecero cervecero-teaser cls-oculto" id="ofertasCervecero" style="margin-bottom:2rem;">
-        <div class="ofertas-header">
-            <h2>🍺 JUEVES CERVECERO <span class="ofertas-badge skeleton-text-inline" id="cervecero-badge">Cargando…</span></h2>
-            <div class="cervecero-timer" id="cervecero-timer" style="display:none;">
-                🕐 Termina a las <span id="cervecero-cierre">22:00</span>hs
-            </div>
-        </div>
-        <div class="ofertas-stock-warning skeleton-text-inline" id="msg-cervecero"
-             style="background:rgba(249,168,37,0.15);color:#f9a825;border-left:4px solid #f9a825;">
-            🍺 Cargando información de Jueves Cervecero…
-            <div id="cervecero-compartir-btn" style="margin-top:10px;display:none;">
-                <button onclick="compartirCervecero()"
-                        style="background:#25D366;color:white;border:none;border-radius:20px;
-                               padding:8px 18px;font-size:0.82rem;font-weight:700;cursor:pointer;
-                               display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(0,0,0,0.2);">
-                    📲 Pasale la oferta a un amigo
-                </button>
-            </div>
-        </div>
-        <div class="ofertas-products-grid" id="cervecero-grid"></div>
-    </div>
-    <script>
-        // Chequeo síncrono, sin esperar al fetch de productos — evita cualquier
-        // parpadeo del contenedor en días que no son jueves.
-        (function() {
-            try {
-                var arg = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' }));
-                if (arg.getDay() === 4) {
-                    document.getElementById('ofertasCervecero').classList.remove('cls-oculto');
-                }
-            } catch (e) {}
-        })();
-    </script>
-
-    <!-- ========== PROMOS ========== -->
-    <div class="ofertas-container promos cls-oculto" id="ofertasPromos">
-        <div class="ofertas-header" style="text-align:center;">
-            <h2 style="justify-content:center;">🎯 PROMOS ACTIVAS <span class="ofertas-badge">HOY</span></h2>
-        </div>
-        <div class="ofertas-products-grid" id="promos-grid"></div>
-    </div>
-
-    <!-- ========== COMBOS ========== -->
-    <div class="ofertas-container cls-oculto" id="ofertasCombos"
-         style="border-color:#e65100;background:linear-gradient(135deg,#fff3e0,#ffe0b2);">
-        <div class="ofertas-header" style="background:linear-gradient(135deg,#bf360c,#e65100);text-align:center;">
-            <h2 style="justify-content:center;">📦 COMBOS ACTIVOS <span class="ofertas-badge" style="background:#ffcc80;color:#bf360c;">HOY</span></h2>
-        </div>
-        <div class="ofertas-products-grid" id="combos-grid"></div>
-    </div>
-
-    <!-- ========== OFERTAS RELÁMPAGO ========== -->
-    <div class="ofertas-container relampago cls-oculto" id="ofertasRelampago">
-        <div class="ofertas-header">
-            <h2>
-                ⚡ OFERTAS RELÁMPAGO 
-                <span class="ofertas-badge">HOY SOLO</span>
-            </h2>
-            <div class="relampago-countdown-wrap" id="relampago-timer">
-                <span class="relampago-cd-label">⚡ TERMINA EN</span>
-                <div class="relampago-cd-digits">
-                    <div class="relampago-cd-unit">
-                        <span class="relampago-cd-num" id="relampago-cd-hh">00</span>
-                        <span class="relampago-cd-unit-label">HS</span>
-                    </div>
-                    <span class="relampago-cd-sep">:</span>
-                    <div class="relampago-cd-unit">
-                        <span class="relampago-cd-num" id="relampago-cd-mm">00</span>
-                        <span class="relampago-cd-unit-label">MIN</span>
-                    </div>
-                    <span class="relampago-cd-sep">:</span>
-                    <div class="relampago-cd-unit">
-                        <span class="relampago-cd-num" id="relampago-cd-ss">00</span>
-                        <span class="relampago-cd-unit-label">SEG</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="ofertas-stock-warning" id="msg-relampago">
-            ⚡ Precio válido <strong>solo mientras dura el cronómetro</strong>. Mañana vuelve al precio normal.
-        </div>
-        
-        <div class="ofertas-products-grid" id="relampago-grid">
-            <!-- Productos relámpago -->
-        </div>
-    </div>
-
-    <!-- ========== OFERTAS DESTACADAS ========== -->
-    <div class="ofertas-container destacadas cls-oculto" id="ofertasDestacadas">
-        <div class="ofertas-header">
-            <h2>
-                🔥 OFERTAS DESTACADAS 
-                <span class="ofertas-badge">FINDE</span>
-            </h2>
-            <div class="relampago-countdown-wrap" id="destacadas-timer">
-                <span class="relampago-cd-label">🔥 TERMINA EN</span>
-                <div class="relampago-cd-digits">
-                    <div class="relampago-cd-unit">
-                        <span class="relampago-cd-num" id="destacadas-cd-hh">00</span>
-                        <span class="relampago-cd-unit-label">HS</span>
-                    </div>
-                    <span class="relampago-cd-sep">:</span>
-                    <div class="relampago-cd-unit">
-                        <span class="relampago-cd-num" id="destacadas-cd-mm">00</span>
-                        <span class="relampago-cd-unit-label">MIN</span>
-                    </div>
-                    <span class="relampago-cd-sep">:</span>
-                    <div class="relampago-cd-unit">
-                        <span class="relampago-cd-num" id="destacadas-cd-ss">00</span>
-                        <span class="relampago-cd-unit-label">SEG</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="ofertas-stock-warning" id="msg-destacadas">
-            💰 Precios que elegimos para vos esta semana. No los vas a encontrar así en otro lado.
-        </div>
-        
-        <div class="ofertas-products-grid" id="destacadas-grid">
-            <!-- Productos destacadas -->
-        </div>
-    </div>
-
-    <!-- ========== OFERTAS ESPECIALES ========== -->
-    <div class="ofertas-container especiales cls-oculto" id="ofertasEspeciales">
-        <div class="ofertas-header">
-            <h2>
-                ⭐ OFERTAS ESPECIALES 
-                <span class="ofertas-badge">NOCHE</span>
-            </h2>
-            <div class="relampago-countdown-wrap" id="especiales-timer">
-                <span class="relampago-cd-label">⭐ TERMINA EN</span>
-                <div class="relampago-cd-digits">
-                    <div class="relampago-cd-unit">
-                        <span class="relampago-cd-num" id="especiales-cd-hh">00</span>
-                        <span class="relampago-cd-unit-label">HS</span>
-                    </div>
-                    <span class="relampago-cd-sep">:</span>
-                    <div class="relampago-cd-unit">
-                        <span class="relampago-cd-num" id="especiales-cd-mm">00</span>
-                        <span class="relampago-cd-unit-label">MIN</span>
-                    </div>
-                    <span class="relampago-cd-sep">:</span>
-                    <div class="relampago-cd-unit">
-                        <span class="relampago-cd-num" id="especiales-cd-ss">00</span>
-                        <span class="relampago-cd-unit-label">SEG</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="ofertas-stock-warning" id="msg-especiales">
-            🌙 Solo aparecen a esta hora. Si los ves, llegaste justo.
-        </div>
-        
-        <div class="ofertas-products-grid" id="especiales-grid">
-            <!-- Productos especiales -->
-        </div>
-    </div>
-
-    <!-- ========== ÚLTIMAS UNIDADES ========== -->
-    <div class="ofertas-container ultimas cls-oculto" id="ofertasUltimas">
-        <div class="ofertas-header">
-            <h2>
-                🏷️ ÚLTIMAS UNIDADES
-                <span class="ofertas-badge">STOCK LIMITADO</span>
-            </h2>
-        </div>
-        <div class="ofertas-stock-warning" id="msg-ultimas">
-            🏷️ Cuando se acaba, se acaba. <strong>Sin reposición garantizada.</strong>
-        </div>
-        <div class="ofertas-products-grid" id="ultimas-grid"></div>
-    </div>
-
-    <!-- ========== RECIÉN LLEGADOS ========== -->
-    <div class="ofertas-container recien-llegados cls-oculto" id="ofertasRecienLlegados">
-        <div class="ofertas-header">
-            <h2>
-                🆕 RECIÉN LLEGADOS
-                <span class="ofertas-badge">NUEVO</span>
-            </h2>
-        </div>
-        <div class="ofertas-stock-warning" id="msg-recien">
-            📦 Ingresaron al stock en los últimos días. Frescos y listos.
-        </div>
-        <div class="ofertas-products-grid" id="recien-grid">
-            <!-- Productos recién llegados -->
-        </div>
-    </div>
-
-    <!-- ========== MULTICOMPRA ========== -->
-    <div class="ofertas-container multicompra cls-oculto" id="ofertasMulticompra">
-        <div class="ofertas-header">
-            <h2>
-                📦 LLEVANDO MÁS, PAGÁS MENOS
-                <span class="ofertas-badge">MULTICOMPRA</span>
-            </h2>
-        </div>
-        <div class="ofertas-stock-warning" id="msg-multicompra">
-            📦 Precio especial llevando la cantidad indicada en cada producto.
-        </div>
-        <div class="ofertas-products-grid" id="multicompra-grid">
-            <!-- Productos con multicompra -->
-        </div>
-    </div>
-
-    <!-- v176 — index.html ahora es SOLO ofertas activas. El buscador,
-         categorías y la grilla general de todos los productos se mudaron a
-         catalogo.html (archivo aparte) para aliviar el peso de esta página. -->
-    <section class="catalogo-divisor" style="margin:1.8rem 0 1.8rem;text-align:center;padding:0 12px;">
-        <div style="border-top:2px dashed #c8e6c9;margin-bottom:14px;"></div>
-        <h2 style="color:var(--primary-dark);font-size:1.15rem;margin:0 0 4px;">🔍 ¿Qué andás buscando?</h2>
-        <p style="color:var(--gray);font-size:0.85rem;margin:0 0 14px;">Buscá por nombre o elegí una categoría</p>
-        <a href="catalogo.html" style="display:inline-block;background:var(--primary);color:white;
-                  font-weight:800;text-decoration:none;padding:12px 26px;border-radius:24px;
-                  font-size:0.95rem;box-shadow:0 4px 15px rgba(46,125,50,0.25);">
-            Ver catálogo completo →
+    <!-- v176 (catalogo.html) — este archivo es la mitad "buscar todo" que se
+         separó de index.html: acá vive el buscador, las categorías y la
+         grilla general. Las ofertas activas (Relámpago, Multicompra,
+         Cervecero, Raspadita, etc.) se quedaron en index.html. -->
+    <section style="margin:0 0 1.2rem;text-align:center;padding:14px 12px;
+                     background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-radius:0 0 14px 14px;">
+        <a href="index.html" style="display:inline-flex;align-items:center;gap:6px;
+                  color:var(--primary-dark);font-weight:800;text-decoration:none;font-size:0.95rem;">
+            ← Volver a Ofertas
         </a>
+    </section>
+
+
+<script>if(window.innerWidth>=768){document.write('<style>#desktopSearch{display:block!important}</style>')}</script>
+    <div class="search-container" id="desktopSearch" style="display:none;">
+        <div class="search-wrapper">
+            <input type="text" id="productSearch" class="search-input" 
+                   placeholder="🔍 Buscar productos por nombre... (Presiona Enter para buscar)">
+            <button class="clear-search" id="clearSearchBtn">✖️</button>
+        </div>
+    </div>
+
+    <section class="categories" id="categories">
+        <!-- Categorías dinámicas -->
+    </section>
+
+    <section class="products-grid" id="productsGrid">
+        <div class="skeleton-grid" id="skeletonGrid">
+        <div class="skeleton-card">
+            <div class="skeleton-image"></div>
+            <div class="skeleton-line" style="width:80%"></div>
+            <div class="skeleton-line" style="width:55%"></div>
+            <div class="skeleton-button"></div>
+        </div>
+        <div class="skeleton-card">
+            <div class="skeleton-image"></div>
+            <div class="skeleton-line" style="width:80%"></div>
+            <div class="skeleton-line" style="width:55%"></div>
+            <div class="skeleton-button"></div>
+        </div>
+        <div class="skeleton-card">
+            <div class="skeleton-image"></div>
+            <div class="skeleton-line" style="width:80%"></div>
+            <div class="skeleton-line" style="width:55%"></div>
+            <div class="skeleton-button"></div>
+        </div>
+        <div class="skeleton-card">
+            <div class="skeleton-image"></div>
+            <div class="skeleton-line" style="width:80%"></div>
+            <div class="skeleton-line" style="width:55%"></div>
+            <div class="skeleton-button"></div>
+        </div>
+        <div class="skeleton-card">
+            <div class="skeleton-image"></div>
+            <div class="skeleton-line" style="width:80%"></div>
+            <div class="skeleton-line" style="width:55%"></div>
+            <div class="skeleton-button"></div>
+        </div>
+        <div class="skeleton-card">
+            <div class="skeleton-image"></div>
+            <div class="skeleton-line" style="width:80%"></div>
+            <div class="skeleton-line" style="width:55%"></div>
+            <div class="skeleton-button"></div>
+        </div>
+        <div class="skeleton-card">
+            <div class="skeleton-image"></div>
+            <div class="skeleton-line" style="width:80%"></div>
+            <div class="skeleton-line" style="width:55%"></div>
+            <div class="skeleton-button"></div>
+        </div>
+        <div class="skeleton-card">
+            <div class="skeleton-image"></div>
+            <div class="skeleton-line" style="width:80%"></div>
+            <div class="skeleton-line" style="width:55%"></div>
+            <div class="skeleton-button"></div>
+        </div>
+    </div>
     </section>
 </div>
 
@@ -2734,7 +2524,24 @@
     </div>
 </div>
 
-<!-- v176 — modal de búsqueda móvil eliminado: se mudó a catalogo.html -->
+<div class="search-modal" id="searchModal">
+    <div class="search-modal-content">
+        <div class="search-modal-header">
+            <h2>Buscar Productos</h2>
+            <button class="close-search" id="closeSearch">&times;</button>
+        </div>
+        <div class="search-modal-body">
+            <div class="search-wrapper">
+                <input type="text" id="mobileSearch" class="search-input" 
+                       placeholder="🔍 Escribe nombre... (Presiona Enter para buscar)">
+                <button class="clear-search" id="clearMobileSearchBtn">✖️</button>
+            </div>
+            <div class="mobile-search-results" id="mobileSearchResults">
+                <!-- Resultados búsqueda móvil -->
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="cart-modal" id="cartModal">
     <div class="cart-content">
@@ -4482,50 +4289,12 @@ setInterval(() => { if (_cerveceroProductos.length) renderizarCervecero(); }, 5 
 
 
 function actualizarTodasLasVistas() {
-    construirPools();
-    seleccionarProductosOfertas();
-    iniciarMotorAutoCheck();
-
-    // ── FALLBACK Últimas Unidades ──
-    // Si GAS no envió ultimasSeleccionadas (falla al parsear timestamp en config_sistema),
-    // intentar recuperarlas del valor crudo guardado desde cargarConfigSistema
-    if (!_poolUltimasSeleccion.length && window._configUltimasRaw) {
-        try {
-            const m = window._configUltimasRaw.match(/\[[\d,\s]+\]/);
-            if (m) {
-                const ids = JSON.parse(m[0]);
-                const recuperadas = ids
-                    .map(id => ({ id: Number(id), diasParaVencer: null }))
-                    .filter(u => products.some(p => p.id === u.id));
-                if (recuperadas.length) {
-                    _poolUltimasSeleccion = recuperadas;
-                    console.log('🏷️ Últimas recuperadas vía fallback config:', recuperadas.length, 'de', ids.length, 'IDs');
-                } else {
-                    console.warn('⚠️ Últimas fallback: IDs', ids, '— ninguno matchea products (ids disponibles son numéricos del GAS)');
-                }
-            }
-        } catch(e) { console.warn('⚠️ Últimas fallback error:', e.message); }
-    }
-    
-    // Log correcto: fuente de verdad es esPromoActiva (col J), no category === 'PROMOS'
-    const promosActivas = products.filter(p => esPromoActiva(p) && p.stockNumber > 0);
-    const ultimasActivas = (_poolUltimasSeleccion || []);
-    console.log(`   🎯 Combos/Promos — ${promosActivas.length} productos con stock`);
-    console.log(`   🏷️ Últimas       — ${ultimasActivas.length} seleccionados desde planilla`);
-    console.log('═══════════════════════════════════\n');
-
-    // v174 — Multicompra primero: es siempre un contenedor de pocos productos
-    // (liviano), sale rápido y da algo útil en pantalla antes de las secciones
-    // más pesadas.
-    renderizarMulticompra();
-    renderizarContenedorOfertas('relampago', productosRelampago);
-    renderizarContenedorOfertas('destacadas', productosDestacadas);
-    renderizarPromos();
-    renderizarUltimasUnidades();
-    renderizarRecienLlegados();
-    renderizarContenedorOfertas('especiales', productosEspeciales);
-    renderizarCervecero();
-    
+    // v176 (catalogo.html) — a diferencia de index.html, esta página es
+    // "buscar/ver todo el catálogo": no se arman carruseles de oferta acá
+    // (eso quedó en index.html), así que no se llama a construirPools()/
+    // seleccionarProductosOfertas()/renderizarXxx() de cada oferta — eso
+    // evita que idsEnOfertas excluya esos productos de la grilla general.
+    // Todos los productos (tengan o no oferta activa) aparecen acá.
     renderizarProductosNormales();
 }
 
@@ -4589,28 +4358,20 @@ async function loadProductsFromAPI() {
         renderCategories();
         actualizarTodasLasVistas();
 
-        if (window._intervaloActualizacion) clearInterval(window._intervaloActualizacion);
-        window._intervaloActualizacion = setInterval(actualizarSoloOfertas, 60000);
+        // v176 (catalogo.html) — sin intervalo de refresco de ofertas: esta
+        // página no las muestra, no tiene sentido pedirlas cada 60s.
 
     } catch(error) {
         console.error('💥 ERROR:', error);
-        // v176 — en index.html ya no existe #productsGrid (se movió a
-        // catalogo.html); si falla el fetch acá, mostrar el error donde
-        // exista, o solo loguearlo.
-        const _grid = document.getElementById('productsGrid');
-        if (_grid) {
-            _grid.innerHTML = `
-                <div class="error-message">
-                    <h3>Error al cargar productos</h3>
-                    <p>${error.message}</p>
-                    <button onclick="loadProductsFromAPI()" class="retry-btn">
-                        🔄 Reintentar
-                    </button>
-                </div>
-            `;
-        } else {
-            alert('No se pudieron cargar las ofertas. Recargá la página o probá de nuevo en un momento.');
-        }
+        document.getElementById('productsGrid').innerHTML = `
+            <div class="error-message">
+                <h3>Error al cargar productos</h3>
+                <p>${error.message}</p>
+                <button onclick="loadProductsFromAPI()" class="retry-btn">
+                    🔄 Reintentar
+                </button>
+            </div>
+        `;
     }
 }
 
@@ -6685,17 +6446,12 @@ function setupEventListeners() {
     document.getElementById('floatingCart').addEventListener('click', openCart);
     document.getElementById('closeCart').addEventListener('click', closeCartModal);
     
-    // Búsqueda — v176: el buscador se mudó a catalogo.html (ya no vive acá,
-    // así que el botón flotante ahora navega en vez de abrir un modal local).
-    document.getElementById('floatingSearch').addEventListener('click', () => {
-        window.location.href = 'catalogo.html';
-    });
+    // Búsqueda
+    document.getElementById('floatingSearch').addEventListener('click', openSearchModal);
+    document.getElementById('closeSearch').addEventListener('click', closeSearchModal);
     
-    // Home — v176: goToHome() limpiaba buscador/categorías que ya no existen
-    // acá; ahora simplemente sube al principio de la página.
-    document.getElementById('floatingHome').addEventListener('click', () => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
+    // Home
+    document.getElementById('floatingHome').addEventListener('click', goToHome);
     
     // WhatsApp
     document.getElementById('sendOrder').addEventListener('click', sendOrderViaWhatsApp);
@@ -6703,6 +6459,10 @@ function setupEventListeners() {
     // Modales
     document.getElementById('cartModal').addEventListener('click', function(e) {
         if (e.target === this) closeCartModal();
+    });
+    
+    document.getElementById('searchModal').addEventListener('click', function(e) {
+        if (e.target === this) closeSearchModal();
     });
     
     // EVENT DELEGATION MEJORADO PARA TODOS LOS BOTONES "AGREGAR AL CARRITO"
@@ -6890,8 +6650,7 @@ function init() {
     window.addEventListener('hashchange', manejarDeepLink);
     
     setupEventListeners();
-    // v176 — sin setupSearch() acá: el buscador se mudó a catalogo.html,
-    // llamarla tiraría error contra los inputs que ya no existen en esta página.
+    setupSearch();
     updateCartCount();
     
     window.addEventListener('scroll', function() {
@@ -6910,8 +6669,8 @@ function init() {
         loadProductsFromAPI();
     });
 
-    // Jueves Cervecero — cargar en paralelo (independiente del resto)
-    cargarJuevesCervecero();
+    // v176 (catalogo.html) — sin Jueves Cervecero acá, no se muestra en esta página
+    // (se ahorra ese fetch por completo).
     
     // Iniciar monitor de stock después de cargar productos
     setTimeout(() => {
@@ -7110,6 +6869,11 @@ setInterval(actualizarRelojHeader, 10000);
 // ══════════════════════════════════════════════════════
 //  MÓDULO RASPADITA — integrado en index.html
 // ══════════════════════════════════════════════════════
+// v176 — guard agregado: todo este módulo asume que su HTML (#rasp-modulo,
+// #raspBtnReveal, etc.) existe en la página. En catalogo.html ese HTML no
+// está (Raspadita se quedó en index.html), así que sin este guard tiraba
+// error apenas intentaba engancharse a un elemento que no existe.
+if (document.getElementById('rasp-modulo')) {
 (function() {
 const RASP_GAS     = 'https://script.google.com/macros/s/AKfycbzWZzDvdGfW8vd2-FpQolT852cdPMeHbfKugn9DBOlju75bE1D0SUNB5EKEDOsI2vP4lA/exec';
 const RASP_IMG     = 'https://raw.githubusercontent.com/almacen-copihue/almacen-copihue/main/imagenes-productos/';
@@ -7410,6 +7174,7 @@ if (_raspModulo && 'IntersectionObserver' in window) {
     }
 }
 })();
+} // cierre del guard "if (document.getElementById('rasp-modulo'))"
 
 </script>
 </body>
